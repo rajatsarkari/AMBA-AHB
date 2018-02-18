@@ -27,7 +27,7 @@ module AMBA_AHB_SLAVE(HREADY, HRESP, HRDATA, HSPLITx, HSELx, HADDR, HWRITE, HTRA
 	//Reg Declarations
 	integer				COUNT_R, COUNT_W;
 	
-	reg				HREADY, WRAP;
+	reg				HREADY, WRAP, BUSY = 0;
 	reg	[1:0]			HRESP;
 	reg	[31:0]			HRDATA;
 	reg	[15:0]			HSPLITx;
@@ -55,140 +55,140 @@ module AMBA_AHB_SLAVE(HREADY, HRESP, HRDATA, HSPLITx, HSELx, HADDR, HWRITE, HTRA
 	always@(posedge HCLK or negedge HRESETn)
 		//Reset
 		if(!HRESETn && HSELx) fork
-			HREADY		<= 1;
-			HRESP		<= `OKAY;
-			HRDATA		<= 0;
-			HSPLITx 	<= 0;
+			HREADY		= 1;
+			HRESP		= `OKAY;
+			HRDATA		= 0;
+			HSPLITx 	= 0;
 		join
 		//Set
-		else fork
-			if(HRESETn && HSELx) fork
-				//STAGE S1 PIPE registers 
-				HTRANS_S1  	<= HTRANS;
-				BASE_HADDR 	<= HADDR;
-				HADDR_S1 	<= HADDR;
-				HREADY 		<= 1;
-				HRESP	 	<= `OKAY;
-				if(HBURST == SINGLE) begin
-				BURSTLEN 	<= 1;
-				end
-				if(HBURST == INCR) begin
-				BURSTLEN 	<= 4;		
-				end
-				if(HBURST == WRAP4) begin
-				BURSTLEN 	<= 4;
-				WRAP  		<= 1;		
-				end
-				if(HBURST == INCR4) begin
-				BURSTLEN 	<= 4;		
-				end
-				if(HBURST == WRAP8) begin
-				BURSTLEN 	<= 8;
-				WRAP  		<= 1;		
-				end
-				if(HBURST == INCR8) begin
-				BURSTLEN 	<= 8;		
-				end
-				if(HBURST == WRAP16) begin
-				BURSTLEN 	<= 16;
-				WRAP  		<= 1;		
-				end
-				if(HBURST == INCR16) begin
-				BURSTLEN 	<= 16;		
-				end
-				BURST_LEN_S1	<= BURSTLEN;
-				NUMBER_BYTES 	<= 2**HSIZE;
-				//DT_SIZE	<= NUMBER_BYTES * BURSTLEN;
-				//ALIGNED_ADDR	<= (HADDR/NUMBER_BYTES) * NUMBER_BYTES;
-				//ALIGNED	<= (HADDR == ALIGNED_ADDR);
-//				LOWWRAP		<= (HADDR/DT_SIZE) * DT_SIZE;
-//				UPWRAP		<= LOWWRAP + DT_SIZE;
-				LBL		<= HADDR - ((HADDR/4)*4);
-				UBL 		<= LBL + NUMBER_BYTES - 1;
-				//HMASTER CHECK
-			join
-			/*2-CYCLE RESPONSE CHECK FOR HRESP
+		else 	fork 
+			if(HRESETn && HSELx && !BUSY) fork
+			//STAGE S1 PIPE registers 
+			BASE_HADDR 	= HADDR;
+			HADDR_S1 	= HADDR;
+			HREADY 		= 1;
+			HRESP	 	= `OKAY;
+			if(HBURST == SINGLE) begin
+			BURSTLEN 	= 1;
+			end
+			if(HBURST == INCR) begin
+			BURSTLEN 	= 4;		
+			end
+			if(HBURST == WRAP4) begin
+			BURSTLEN 	= 4;
+			WRAP  		= 1;		
+			end
+			if(HBURST == INCR4) begin
+			BURSTLEN 	= 4;		
+			end
+			if(HBURST == WRAP8) begin
+			BURSTLEN 	= 8;
+			WRAP  		= 1;		
+			end
+			if(HBURST == INCR8) begin
+			BURSTLEN 	= 8;		
+			end
+			if(HBURST == WRAP16) begin
+			BURSTLEN 	= 16;
+			WRAP  		= 1;		
+			end
+			if(HBURST == INCR16) begin
+			BURSTLEN 	= 16;		
+			end
+			BURST_LEN_S1	= BURSTLEN;
+			NUMBER_BYTES 	= 2**HSIZE;
+			DT_SIZE		= (2**HSIZE) * BURSTLEN;
+			//ALIGNED_ADDR	= (HADDR/NUMBER_BYTES) * NUMBER_BYTES;
+			//ALIGNED	= (HADDR == ALIGNED_ADDR);
+			LOWWRAP		= (HADDR/((2**HSIZE)*BURSTLEN)) * (2**HSIZE)*BURSTLEN;
+			UPWRAP		= LOWWRAP + ((2**HSIZE)*BURSTLEN);
+			LBL		= HADDR - ((HADDR/4)*4);
+			UBL 		= LBL + (2**HSIZE) - 1;
+			//HMASTER CHECK
+			/*2-CYCE RESPONSE CHECK FOR HRESP
 			if(HRESP == `SPLIT || HRESP == `RETRY || HRESP == `ERROR) begin
-				HRESP_S1 	<= HRESP;
-				HREADY 		<= 0;
+				HRESP_S1 	= HRESP;
+				HREADY 		= 0;
 			end*/
+			join
+			HTRANS_S1  	= HTRANS;
 		join
 	//STAGE S2 -------------------------------------DATA PHASE--------------------------------------------------------------------------------
 	always@(posedge HCLK) begin
-		if(HSELx && HREADY && HRESETn) begin
-			DT_SIZE		<= NUMBER_BYTES * BURSTLEN;
-			LOWWRAP		<= (HADDR/DT_SIZE) * DT_SIZE;
-			UPWRAP		<= LOWWRAP + DT_SIZE;			
-		end
+//		if(HSELx && HREADY && HRESETn) begin
+//			DT_SIZE		<= NUMBER_BYTES * BURSTLEN;
+//			LOWWRAP		<= (HADDR/DT_SIZE) * DT_SIZE;
+//			UPWRAP		<= LOWWRAP + DT_SIZE;			
+//		end
 		case(HTRANS_S1)
 			`IDLE		://NO DATA TRANSFER
 					begin
-					HRESP <= `OKAY;
+					HRESP = `OKAY;
 					end		
 			`BUSY		://WAIT BETWEEN BURSTS
 					begin
-					HRESP <= `OKAY;
+					HRESP = `OKAY;
 					end
 			`NON_SEQ	://FIRST TRANSFER OF THE BURST OR THE SINGLE TRANSFER
 					fork
-					//2-CYCLE RESPONSE CHECK FOR HRESP
+					BUSY = 1;//2-CYCLE RESPONSE CHECK FOR HRESP
 					if(HRESP_S1 == `SPLIT || HRESP_S1 == `RETRY || HRESP_S1 == `ERROR) begin
-							HREADY 		<= 0;
+							HREADY 		= 0;
 					end
 					//WRITE CHANNEL
-					if(HWRITE && HREADY && HSELx && HRESP == `OKAY) fork
+					if(HWRITE && HREADY && HSELx && HRESP == `OKAY) begin
 						for(COUNT_W = LBL; COUNT_W <= UBL; COUNT_W = COUNT_W + 1) begin
-							mem[HADDR_S1] 	<= HWDATA[COUNT_W+:7];
-							HADDR_S1 	<= HADDR_S1 + 1;
+							mem[HADDR_S1] 	= HWDATA[(8*COUNT_W)+:7];
+							HADDR_S1 	= HADDR_S1 + 1;
 						end
-							HRESP 		<= `OKAY;
-							COUNT_W 	<= 0;
-					join
+							HRESP 		= `OKAY;
+							COUNT_W 	= 0;
+					end
 					//READ CHANNEL
-					if(!HWRITE && HREADY && HSELx && HRESP == `OKAY) fork
+					if(!HWRITE && HREADY && HSELx && HRESP == `OKAY) begin
 						for(COUNT_R = LBL; COUNT_R <= UBL; COUNT_R = COUNT_R + 1) begin
-							HRDATA[COUNT_R+:7] 	<= mem[HADDR_S1];
-							HADDR_S1 		<= HADDR_S1 + 1;
+							HRDATA[8*COUNT_R+:7] 	= mem[HADDR_S1];
+							HADDR_S1 		= HADDR_S1 + 1;
 						end
-							HRESP 		<= `OKAY;
-							COUNT_R		<= 0;
-					join
+							HRESP 		= `OKAY;
+							COUNT_R		= 0;
+					end
 					join
 			`SEQ		://BURST TRANSFER
 					fork
-					//2-CYCLE RESPONSE CHECK FOR HRESP
+					BUSY = 1;//2-CYCLE RESPONSE CHECK FOR HRESP
 					if(HRESP_S1 == `SPLIT || HRESP_S1 == `RETRY || HRESP_S1 == `ERROR) begin
-							HREADY 		<= 0;
-							HADDR_S1	<= BASE_HADDR;
+							HREADY 		= 0;
+							HADDR_S1	= BASE_HADDR;
 					end
 					//WRITE CHANNEL
-					if(HWRITE && HREADY && HSELx && HRESP == `OKAY) fork
+					if(HWRITE && HREADY && HSELx && HRESP == `OKAY) begin
 						if(BURST_LEN_S1 > 1) begin
 							for(COUNT_W = LBL; COUNT_W <= UBL; COUNT_W = COUNT_W + 1) begin
-								mem[HADDR_S1] 	<= HWDATA[COUNT_W+:7];
-								HADDR_S1	<= HADDR_S1 + 1;
+								mem[HADDR_S1] 	= HWDATA[(8*COUNT_W)+:7];
+								HADDR_S1	= HADDR_S1 + 1;
 							end
 							if(HADDR_S1 >= UPWRAP) HADDR_S1 <= LOWWRAP;
-							BURST_LEN_S1 	<= BURST_LEN_S1 - 1;
-							HRESP 		<= `OKAY;
+							BURST_LEN_S1 	= BURST_LEN_S1 - 1;
+							HRESP 		= `OKAY;
 						end
-					join
+					end
 					//READ CHANNEL
-					if(!HWRITE && HREADY && HSELx && HRESP == `OKAY) fork
+					if(!HWRITE && HREADY && HSELx && HRESP == `OKAY) begin
 						if(BURST_LEN_S1 > 1) begin
 							for(COUNT_R = LBL; COUNT_R <= UBL; COUNT_R = COUNT_R + 1) begin
-								HRDATA[COUNT_R+:7] 	<= mem[HADDR_S1];
-								HADDR_S1 		<= HADDR_S1 + 1;
+								HRDATA[8*COUNT_R+:7] 	= mem[HADDR_S1];
+								HADDR_S1 		= HADDR_S1 + 1;
 							end
-							if(HADDR_S1 >= UPWRAP) HADDR_S1 <= LOWWRAP;						
-							BURST_LEN_S1 	<= BURST_LEN_S1 - 1;
-							HRESP 		<= `OKAY;
+							if(HADDR_S1 >= UPWRAP) HADDR_S1 = LOWWRAP;						
+							BURST_LEN_S1 	= BURST_LEN_S1 - 1;
+							HRESP 		= `OKAY;
 						end
-					join
+					end
 					join
 			default:	begin
-					HRESP	<= `OKAY;
-					HREADY  <= 1;
+					HRESP	= `OKAY;
+					HREADY  = 1;
 					end
 		endcase	
 	end
